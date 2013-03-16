@@ -155,7 +155,7 @@ Observable = {}
 -- Simple factory methods: return_, empty, never, throw, create
 
 function Observable.return_( value )
-  return self.createWithSubscribeMethod_( 
+  return Observable.createWithSubscribeMethod_( 
       function( self, observer ) 
         observer:onNext(value)
         observer:onCompleted()
@@ -164,7 +164,7 @@ function Observable.return_( value )
 end
 
 function Observable.empty()
-  return self.createWithSubscribeMethod_( 
+  return Observable.createWithSubscribeMethod_( 
       function( self, observer ) 
         observer:onCompleted()
         return _NoOpDisposable
@@ -172,14 +172,14 @@ function Observable.empty()
 end
 
 function Observable.never()
-  return self.createWithSubscribeMethod_( 
+  return Observable.createWithSubscribeMethod_( 
       function( self, observer )
         return _NoOpDisposable
       end );
 end
 
 function Observable.throw( e )
-  return createWithSubscribeMethod_( 
+  return Observable.createWithSubscribeMethod_( 
       function( self, observer ) 
         observer:onError(e)
         return _NoOpDisposable
@@ -206,7 +206,7 @@ function Observable.createWithSubscribeMethod_( subscribeMethod )
 end
 
 _CreateObservableWithSubscribeMethod = implements_IObservable()
-function _CreateObservableWithSubscribeMethod:init( subscribeMethod )
+function _CreateObservableWithSubscribeMethod:_init( subscribeMethod )
   self.subscribe = subscribeMethod
 end
 
@@ -639,6 +639,17 @@ o2:complete()
 
 
 Observable.range(1,7):dump("o3")
+
+Observable.range(2,6)
+  :select('X+3')
+  :where('X%2==0')
+  :dump('!')
+  
+Observable.return_(7):dump('7')
+Observable.empty():dump('empty')
+Observable.never():dump('never') -- shouldn't output anything
+Observable.throw("eek"):dump('throw')
+
 end
 test()
 
