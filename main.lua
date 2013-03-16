@@ -18,12 +18,11 @@
 ------------------------------------------------------------------------------
 ml = require 'ml'.import() -- https://github.com/stevedonovan/Microlight
 ------------------------------------------------------------------------------
--- the Rx core interfaces, only the interfaces, to make things clear
--- This section is non-operative code for documentation purposes only
--- everything is redefined below.
-
 function nonOperativeDocumentation()
-    
+  -- This section is non-operative code for documentation purposes only
+  -- everything is redefined below.
+  -- the Rx core interfaces, only the interfaces, to make things clear
+
   -- IDisposable Interface http://msdn.microsoft.com/en-us/library/system.idisposable.aspx
   -- In this Lua implementation, Disposables can be any table with an :dispose() method
   -- There is no requirement to derive from a base class.
@@ -108,7 +107,7 @@ function implements_IObservable()
 end
 
 function test_implements_IObservable()
-  TestObservable = inherits_IObservable() -- construct a new type
+  TestObservable = implements_IObservable() -- construct a new type
   function TestObservable:_init( x ) self.x_ = x end -- define a constructor
   function TestObservable:subscribe(o) assert( o == 15 ) end -- override a base method
   x = TestObservable( 1234 )
@@ -121,7 +120,7 @@ function test_implements_IObservable()
   IObservable.foo = nil
   --x:foo()
 end
---test_inherits_IObservable()
+--test_implements_IObservable()
 
 ------------------------------------------------------------------------------
 
