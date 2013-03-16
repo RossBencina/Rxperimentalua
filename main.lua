@@ -239,12 +239,12 @@ function _GenerateObservable:subscribe( observer )
   end
   
   observer:onCompleted()  
-  return _NoOpDisposable;
+  return _NoOpDisposable
 end
 
 function Observable.range( start, count )
   return Observable.generate( 0,
-      function( value ) return value <= count end,
+      function( value ) return value < count end,
       function( value ) return value + 1 end,
       function( value ) return start + value end )  
 end
@@ -295,6 +295,9 @@ function IObservable:where( predicate )
   ]]--
 end
 
+
+------------------------------------------------------------------------------
+
 -- IO<T> Flatten<T>( IO<IO<T>> ) // ("join")
 -- listens to all incoming observables, subscribes to each one, and outputs all incoming values
 function IObservable:flatten()
@@ -303,7 +306,91 @@ end
 
 -- IO<U> SelectMany<T,U>( IO<T>, Func<T,IO<U>> ) // ("bind")
 function IObservable:selectMany( f )
-  return self.select( f ).flatten()
+  return self:select( f ):flatten()
+end
+
+-- attempt to implement flatten based on
+-- http://channel9.msdn.com/Shows/Going+Deep/E2E-Erik-Meijer-and-Wes-Dyer-Reactive-Framework-Rx-Under-the-Hood-2-of-2
+-- provides an illustration that Rx is formally underpecified in their docs (I'm sure they know what they're doing though :)
+
+_FlattenSubstreamObserver = ml.class()
+function _FlattenSubstreamObserver:_init( parent, sinkObserver )
+  self.sinkObserver_ = sinkObserver
+  self.parent_ = parent;
+end
+function _FlattenSubstreamObserver:onNext( value )
+  -- pass values to sink
+  self.sinkObserver_:onNext( value )
+end
+function _FlattenSubstreamObserver:onError( e )
+  -- dispose all parent's substreams, pass the error to sink
+  -- we do this by delegating to parent's onError method:
+  self.parent_:onError( e )
+end
+function _FlattenSubstreamObserver:onCompleted()
+  -- when a substream completes, we detach and get garbage collected
+  -- we want other substreams to keep delivering events to the sink
+  -- so we don't send onCompleted() to the sink unless we're the last
+  -- substream and the parent's source has completed
+  if self.attachment_ then self.attachment_:dispose() end
+  self.parent_.childStreams_:remove(self.parent_.childStreams_:indexof(self))
+  self.hasCompleted_ = true
+  
+  -- if we are the last subtream and the parent has completed
+  -- notify the sink that we've complete
+  if #self.parent_.childStreams_ == 0 and self.parent_.hasCompleted_ then
+    self.sinkObserver_:onCompleted()
+  end
+end
+
+-------
+
+_FlattenObserver = ml.class() -- observers IObservable<IObservable<T>>
+function _FlattenObserver:_init( sinkObserver )
+  self.sinkObserver_ = sinkObserver
+  self.hasCompleted_ = false
+  self.childStreams_ = ml.Array()
+end
+function _FlattenObserver:onNext( value )
+  -- value is an IObservable<T>. let's call them substreams
+  
+  -- route all values emitted by value to sink observer
+  substreamObserver = _FlattenSubstreamObserver(self, self.sinkObserver_)
+  self.childStreams_:append(substreamObserver)
+  local a = value:subscribe( substreamObserver )
+  -- test for case where observer completes synchronously
+  if substreamObserver.hasCompleted_ then
+    a:dispose()
+  else
+    substreamObserver.attachment_  = a
+  end
+end
+function _FlattenObserver:onError( e )
+  self.hasCompleted_ = true
+  
+  -- detach all child streams and emit the error
+  
+  for i = 1,#self.childStreams_ do
+    self.childStreams_[i].attachment_:dispose()
+  end
+  self.childStreams_ = nil
+  self.sinkObserver_:onError( e )
+end
+function _FlattenObserver:onCompleted()
+  -- when the source stream completes, there will be no more new substreams to process
+  -- but the existing substreams should continue to deliver to client if they exist
+  self.hasCompleted_ = true
+  if #self.childStreams_ == 0 then
+    self.sinkObserver_:onCompleted()
+  end
+end
+
+_FlattenObservable = implements_IObservable()
+function _FlattenObservable:_init( source )
+  self.source_ = source
+end
+function _FlattenObservable:subscribe( observer )
+  return self.source_:subscribe( _FlattenObserver( observer ) )
 end
 
 ------------------------------------------------------------------------------
@@ -425,84 +512,6 @@ end
 ]]--
 
 ------------------------------------------------------------------------------
--- attempt to implement flatten based on
--- http://channel9.msdn.com/Shows/Going+Deep/E2E-Erik-Meijer-and-Wes-Dyer-Reactive-Framework-Rx-Under-the-Hood-2-of-2
--- provides an illustration that Rx is formally underpecified in their docs (I'm sure they know what they're doing though :)
-
-_FlattenSubstreamObserver = ml.class()
-function _FlattenSubstreamObserver:_init( parent, sinkObserver )
-  self.sinkObserver_ = sinkObserver
-  self.parent_ = parent;
-end
-function _FlattenSubstreamObserver:onNext( value )
-  -- pass values to sink
-  self.sinkObserver_:onNext( value )
-end
-function _FlattenSubstreamObserver:onError( e )
-  -- dispose all parent's substreams, pass the error to sink
-  -- we do this by delegating to parent's onError method:
-  self.parent_:onError( e )
-end
-function _FlattenSubstreamObserver:onCompleted()
-  -- when a substream completes, we detach and get garbage collected
-  -- we want other substreams to keep delivering events to the sink
-  -- so we don't send onCompleted() to the sink unless we're the last
-  -- substream and the parent's source has completed
-  self.attachment_:dispose()
-  self.parent_.childStreams_:remove(self)
-  
-  -- if we are the last subtream and the parent has completed
-  -- notify the sink that we've complete
-  if #self.parent_.childStreams_ == 0 and self.parent_.hasCompleted_ then
-    self.sinkObserver_:onCompleted()
-  end
-end
-
--------
-
-_FlattenObserver = ml.class() -- observers IObservable<IObservable<T>>
-function _FlattenObserver:_init( sinkObserver )
-  self.sinkObserver_ = sinkObserver
-  self.hasCompleted_ = false
-  self.childStreams_ = ml.Array()
-end
-function _FlattenObserver:onNext( value )
-  -- value is an IObservable<T>. let's call them substreams
-  
-  -- route all values emitted by value to sink observer
-  substreamObserver = _FlattenSubstreamObserver(self, self.sinkObserver_)
-  substreamObserver.attachment_ = value:subscribe( substreamObserver )
-  self.childStreams_:append(substreamObserver)
-end
-function _FlattenObserver:onError( e )
-  self.hasCompleted_ = true
-  
-  -- detach all child streams and emit the error
-  
-  for i = 1,#self.childStreams_ do
-    self.childStreams_[i].attachment_:dispose()
-  end
-  self.childStreams_ = nil
-  self.sinkObserver_:onError( e )
-end
-function _FlattenObserver:onCompleted()
-  -- when the source stream completes, there will be no more new substreams to process
-  -- but the existing substreams should continue to deliver to client if they exist
-  self.hasCompleted_ = true
-  if #childStreams_ == 0 then
-    self.sinkObserver_:onCompleted()
-  end
-end
-
-_FlattenObservable = implements_IObservable()
-function _FlattenObservable:_init( source )
-  self.source_ = source
-end
-function _FlattenObservable:subscribe( observer )
-  return self.source_:subscribe( _FlattenObserver( observer ) )
-end
-
-------------------------------------------------------------------------------
 
 -- dump( prefix ) -- debugging, prints events prefixed by prefix
 
@@ -538,7 +547,7 @@ function _RemoveTableItemDisposable:_init( table, item )
   self.item_ = item
 end
 function _RemoveTableItemDisposable:dispose()
-  self.table_:remove(self.item_)
+  self.table_:remove(self.table_:indexof(self.item_))
 end
 
 _ObserverCollection = ml.class()
@@ -650,6 +659,14 @@ Observable.empty():dump('empty')
 Observable.never():dump('never') -- shouldn't output anything
 Observable.throw("eek"):dump('throw')
 
+Observable.return_(3)
+  :selectMany( function(i) return Observable.range(1,i) end )
+  :dump("selectMany")
+
+Observable.range(1,3)
+  :selectMany( function(i) return Observable.range(1,i) end )
+  :dump("selectMany")
+  
 end
 test()
 
