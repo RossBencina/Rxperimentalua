@@ -292,6 +292,9 @@ function IObservable:where( predicate )
   -- store the predicate in the factory and pass it to the observer ctor
   -- this is the most straight forward OO way of doing things but results in a lot of boiler plate
   return _GenericObserverFactory( self, _WhereObserver, p )
+  
+  -- use a separately defined observable constructor
+  return _WhereObservable( self, p )
   ]]--
 end
 
