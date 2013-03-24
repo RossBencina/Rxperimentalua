@@ -75,7 +75,9 @@ IObservable = {
 -- If an error is encountered, onError(e) is invoked.
 -- When the value stream completes, onCompleted() is invoked.
 -- Once onCompleted() or onError() have been invoked the observer will not
--- be called again.
+-- be called again. This can be expressed as: N* (E|C)? Meaning: zero or more 
+-- onNext messages optionally followed by one of either onError or onCompleted
+-- [as stated by Wes Dyer in video 3 below].
 IObserver = {
    onNext = function( value ) end,
    onError = function( e ) end,
@@ -254,16 +256,20 @@ C9 Videos
 I found the following 4 videos very helpful in explaining the concepts. 
 I recommend watching the first two listed first.
 
-http://channel9.msdn.com/Shows/Going+Deep/E2E-Erik-Meijer-and-Wes-Dyer-Reactive-Framework-Rx-Under-the-Hood-1-of-2
-http://channel9.msdn.com/Shows/Going+Deep/E2E-Erik-Meijer-and-Wes-Dyer-Reactive-Framework-Rx-Under-the-Hood-2-of-2
+[1] http://channel9.msdn.com/Shows/Going+Deep/E2E-Erik-Meijer-and-Wes-Dyer-Reactive-Framework-Rx-Under-the-Hood-1-of-2
+[2] http://channel9.msdn.com/Shows/Going+Deep/E2E-Erik-Meijer-and-Wes-Dyer-Reactive-Framework-Rx-Under-the-Hood-2-of-2
   Decoder ring for the above videos vs. current Rx nomenclature:
     Attach => Subscribe
     Yeild => OnNext
     Break or OnDone => OnCompleted
     Throw => OnError
 
-http://channel9.msdn.com/shows/Going+Deep/Kim-Hamilton-and-Wes-Dyer-Inside-NET-Rx-and-IObservableIObserver-in-the-BCL-VS-2010/
-http://channel9.msdn.com/shows/Going+Deep/Expert-to-Expert-Brian-Beckman-and-Erik-Meijer-Inside-the-NET-Reactive-Framework-Rx/
+[3] http://channel9.msdn.com/shows/Going+Deep/Kim-Hamilton-and-Wes-Dyer-Inside-NET-Rx-and-IObservableIObserver-in-the-BCL-VS-2010/
+[4] http://channel9.msdn.com/shows/Going+Deep/Expert-to-Expert-Brian-Beckman-and-Erik-Meijer-Inside-the-NET-Reactive-Framework-Rx/
+
+
+Rx Design Guidelines 1.0 [pdf linked from here:]
+http://blogs.msdn.com/b/rxteam/archive/2010/10/28/rx-design-guidelines.aspx
 
 
 introtorx.com book / website
