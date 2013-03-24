@@ -213,14 +213,16 @@ Observable.defaultIfEmpty = make_pipe_operator{
   _init = function( self, sinkObserver, defaultValue )
     self:super( sinkObserver )
     self.defaultValue_ = defaultValue
-    self.isEmpty_ = true
   end,
   onNext = function( self, x )
-    self.isEmpty_ = false
+    -- once we have received a value we don't need to do anything
+    -- so use the pass-through observer behavior
+    self.onNext = PassThroughOperatorObserver.onNext
+    self.onCompleted = PassThroughOperatorObserver.onCompleted
     return self.sinkObserver_:onNext( x )
   end,
   onCompleted = function( self )
-    if self.isEmpty_ then self.sinkObserver_:onNext( self.defaultValue_ ) end
+    self.sinkObserver_:onNext( self.defaultValue_ )
     return self.sinkObserver_:onCompleted()
   end
 }
@@ -306,8 +308,7 @@ Observable.contains = make_pipe_operator{
     if self.comparator_(x, self.value_) then
       self.sinkObserver_:onNext( true )
       return self.sinkObserver_:onCompleted()
-    else
-      return
+    end
   end,
   onCompleted = function( self )
     self.sinkObserver_:onNext( false )
@@ -343,10 +344,34 @@ Observable.take = make_pipe_operator{
 -- condition is true, and then skips the remaining values.
 -- 
 Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+  _init = function( self, sinkObserver, predicate )
     self:super( sinkObserver )
+    self.predicate_ = predicate
   end
-  FIXME TODO ************************************************************************************
+  onNext = function( self, x )
+    if self.predicate_(x) then
+      return self.sinkObserver_:onNext( x )
+    else
+      return self.sinkObserver_:onCompleted()
+    end
+  end
+}
+
+-- variant that also provides the predicate with the index of the item
+Observable.takeWhile_withIndex = make_pipe_operator{
+  _init = function( self, sinkObserver, predicate )
+    self:super( sinkObserver )
+    self.predicate_ = predicate
+    self.i_ = 0
+  end
+  onNext = function( self, x )
+    if self.predicate_(x, self.i_ ) then
+      self.i_ = self.i_ + 1
+      return self.sinkObserver_:onNext( x )
+    else
+      return self.sinkObserver_:onCompleted()
+    end
+  end
 }
 
 ------------------------------------------------------------------------
@@ -355,8 +380,8 @@ Observable.takeWhile = make_pipe_operator{
 -- Returns the values from the source observable sequence until the 
 -- other observable sequence produces a value.
 -- 
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+Observable.takeUntil = make_pipe_operator{
+  _init = function( self, sinkObserver, otherObservable )
     self:super( sinkObserver )
   end
   FIXME TODO ************************************************************************************
@@ -367,8 +392,8 @@ Observable.takeWhile = make_pipe_operator{
 -- Returns a specified number of contiguous elements from the end of 
 -- an observable sequence.
 -- 
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+Observable.takeLast = make_pipe_operator{
+  _init = function( self, sinkObserver, count )
     self:super( sinkObserver )
   end
   FIXME TODO ************************************************************************************
@@ -379,8 +404,8 @@ Observable.takeWhile = make_pipe_operator{
 -- Bypasses a specified number of values in an observable sequence 
 -- and then returns the remaining values.
 -- 
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+Observable.skip = make_pipe_operator{
+  _init = function( self, sinkObserver, count )
     self:super( sinkObserver )
   end
   FIXME TODO ************************************************************************************
@@ -391,20 +416,23 @@ Observable.takeWhile = make_pipe_operator{
 -- Bypasses values in an observable sequence as long as a specified 
 -- condition is true and then returns the remaining values.
 -- 
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+Observable.skipWhile = make_pipe_operator{
+  _init = function( self, sinkObserver, predicate )
     self:super( sinkObserver )
   end
   FIXME TODO ************************************************************************************
 }
+
+-- also skipWhile_withIndex
+
 ------------------------------------------------------------------------
 -- skipUntil
 -- 
 -- Returns the values from the source observable sequence only 
 -- after the other observable sequence produces a value.
 -- 
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+Observable.skipUntil = make_pipe_operator{
+  _init = function( self, sinkObserver, otherObservable )
     self:super( sinkObserver )
   end
   FIXME TODO ************************************************************************************
@@ -414,8 +442,8 @@ Observable.takeWhile = make_pipe_operator{
 -- 
 -- Bypasses a specified number of elements at the end of an observable sequence.
 -- 
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+Observable.skipLast = make_pipe_operator{
+  _init = function( self, sinkObserver, count )
     self:super( sinkObserver )
   end
   FIXME TODO ************************************************************************************
@@ -424,17 +452,31 @@ Observable.takeWhile = make_pipe_operator{
 -- where( sourceObservable, predicate )
 -- 
 -- Filters the elements of an observable sequence.
--- FIXME TODO: there is a second overload where the predicate also gets the index
+-- There is an overload where the predicate also gets the index
 Observable.where = make_pipe_operator{
-  _init = function( self, sinkObserver, predicate )
+  _init = function( self, sinkObserver, predicateFn )
     self:super( sinkObserver )
-    self.predicate_ = predicate
+    self.predicateFn_ = predicateFn
   end,
   onNext = function( self, x )
-    if self.predicate_(x) then
+    if self.predicateFn_(x) then
       return self.sinkObserver_:onNext( x )
-    else
-      return
+    end
+  end,
+}
+
+Observable.where_withIndex = make_pipe_operator{
+  _init = function( self, sinkObserver, predicateFn )
+    self:super( sinkObserver )
+    self.predicateFn_ = predicateFn
+    self.i_ = 0
+  end,
+  onNext = function( self, x )
+    local i = self.i_
+    self.i_= self.i_ + 1
+    if self.predicateFn_(x,i) then
+      return self.sinkObserver_:onNext( x )
+    end
   end,
 }
 ------------------------------------------------------------------------
@@ -442,7 +484,7 @@ Observable.where = make_pipe_operator{
 -- 
 -- Projects each element of an observable sequence into a new form 
 -- with the specified source and selector.
--- FIXME TODO: there is a second overload where the predicate also gets the index
+-- There is a overload where the selector also gets the index
 Observable.select = make_pipe_operator{
   _init = function( self, sinkObserver, f )
     self:super( sinkObserver )
@@ -452,6 +494,19 @@ Observable.select = make_pipe_operator{
     return self.sinkObserver_:onNext( self.f_(x) )
   end,
 }
+
+Observable.select_withIndex = make_pipe_operator{
+  _init = function( self, sinkObserver, f )
+    self:super( sinkObserver )
+    self.f_ = f
+    self.i_ = 0
+  end,
+  onNext = function( self, x )
+    local i = self.i_
+    self.i_= self.i_ + 1
+    return self.sinkObserver_:onNext( self.f_(x,i) )
+  end,
+}
 ------------------------------------------------------------------------
 -- selectMany
 -- 
@@ -459,7 +514,7 @@ Observable.select = make_pipe_operator{
 -- sequence and flattens the resulting observable sequences into one
 -- observable sequence
 -- 
-Observable.takeWhile = make_pipe_operator{
+Observable.selectMany = make_pipe_operator{
   _init = function( self, sinkObserver, PARAMS_GO_HERE )
     self:super( sinkObserver )
   end
@@ -469,34 +524,59 @@ Observable.takeWhile = make_pipe_operator{
 -- aggregate
 -- 
 -- Applies an accumulator function over an observable sequence.
--- FIXME TODO: thiere is also a with-seed variant
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+-- FIXME TODO: thiere is also a version with a seed parameter
+-- FIXME TODO: maybe this should take the first value as the seed
+Observable.aggregate = make_pipe_operator{
+  _init = function( self, sinkObserver, accumulatorFn )
     self:super( sinkObserver )
+    self.s_ = 0
+    self.accumulatorFn_ = accumulatorFn
   end
-  FIXME TODO ************************************************************************************
+  onNext = function( self, x )
+    self.s_ = self.accumulatorFn_( self.s_, x )
+  end,
+  onCompleted = function( self )
+    self.sinkObserver_:onNext( self.s_ )
+    return self.sinkObserver_:onCompleted()
+  end
 }
 ------------------------------------------------------------------------
 -- count
 -- 
 -- Returns an int that represents the total number of elements in 
 -- an observable sequence.
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+Observable.count = make_pipe_operator{
+  _init = function( self, sinkObserver )
     self:super( sinkObserver )
+    self.i_ = 0
   end
-  FIXME TODO ************************************************************************************
+  onNext = function( self, x )
+    self.i_ = self.i_ + 1
+  end,
+  onCompleted = function( self )
+    self.sinkObserver_:onNext( self.i_ )
+    return self.sinkObserver_:onCompleted()
+  end
 }
 ------------------------------------------------------------------------
 -- sum
 -- 
 -- Computes the sum of a sequence.
 -- 
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+-- Accumulate the sum of all values. Emit the sum when the sequence
+-- completes. An empty sequence has a sum of zero.
+Observable.sum = make_pipe_operator{
+  _init = function( self, sinkObserver )
     self:super( sinkObserver )
+    self.s_ = 0
   end
-  FIXME TODO ************************************************************************************
+  onNext = function( self, x )
+    self.s_ = self.s_ + x
+  end,
+  onCompleted = function( self )
+    self.sinkObserver_:onNext( self.s_ )
+    return self.sinkObserver_:onCompleted()
+  end
 }
 ------------------------------------------------------------------------
 -- max
@@ -524,28 +604,20 @@ Observable.maxBy = make_pipe_operator{
 -- min
 -- 
 -- Returns the minimum value.
--- there is also a version that takes a comparator
-Observable.min = make_pipe_operator{
-  _init = function( self, sinkObserver, comparator )
+--
+-- Accumulates the minimum value then emits it when the 
+-- sequence completes. Emits error if the sequence is empty.
+Observable.min_withComparator = make_pipe_operator{
+  _init = function( self, sinkObserver, comparatorFn )
     self:super( sinkObserver )
     self.minValue_ = nil
-    if comparator ~= nil then
-      self.onNext = function( self, x )
-        if self.minValue_ == nil then
-          self.minValue_ = x
-        elseif x < self.minValue_ then
-          self.minValue_ = x
-        end
-      end
-    else
-      self.comparator_ = comparator
-      self.onNext = function( self, x )
-        if self.minValue_ == nil then
-          self.minValue_ = x
-        elseif self.comparator_( x, self.minValue_ ) then
-          self.minValue_ = x
-        end
-      end
+    self.comparatorFn_ = comparatorFn
+  end,
+  self.onNext = function( self, x )
+    if self.minValue_ == nil then
+      self.minValue_ = x
+    elseif self.comparatorFn_( x, self.minValue_ ) then
+      self.minValue_ = x
     end
   end,
   onCompleted = function( self )
@@ -556,6 +628,36 @@ Observable.min = make_pipe_operator{
     end,
   end
 }
+
+Observable.min_noComparator = make_pipe_operator{
+  _init = function( self, sinkObserver )
+    self:super( sinkObserver )
+    self.minValue_ = nil
+  end,
+  self.onNext = function( self, x )
+    if self.minValue_ == nil then
+      self.minValue_ = x
+    elseif x < self.minValue_ then
+      self.minValue_ = x
+    end
+  end,
+  onCompleted = function( self )
+    if self.minValue_ == nil then
+      return self.sinkObserver_:onError("no values received")
+    else
+      return self.sinkObserver_:onCompleted()
+    end,
+  end
+}
+
+Observable.min = function( sourceObservable, comparatorFn )
+  if comparatorFn == nil then
+    return Observable.min_noComparator()
+  else
+    return Observable.min_withComparator(comparatorFn)
+  end
+end
+
 ------------------------------------------------------------------------
 -- minBy
 -- 
@@ -571,8 +673,10 @@ Observable.minBy = make_pipe_operator{
 -- average
 -- 
 -- Computes the average of an observable sequence.
--- 
-Observable.takeWhile = make_pipe_operator{
+--
+-- Accumulates each value then emits the result divided by count when the 
+-- sequence completes. Emits error if the sequence is empty.
+Observable.average = make_pipe_operator{
   _init = function( self, sinkObserver, PARAMS_GO_HERE )
     self:super( sinkObserver )
   end
@@ -583,18 +687,52 @@ Observable.takeWhile = make_pipe_operator{
 -- 
 -- Determines whether all elements of an observable sequence satisfies a condition.
 -- 
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+Observable.all = make_pipe_operator{
+  _init = function( self, sinkObserver, predicateFn )
     self:super( sinkObserver )
+    self.predicateFn_ = predicateFn
+    self.s_ = true
   end
-  FIXME TODO ************************************************************************************
+  onNext = function( self, x )
+    if self.s_ then
+       self.s_ = self.predicateFn_(x)
+       if not self.s_ then
+        self.sinkObserver_:onNext( false )
+        return self.sinkObserver_:onCompleted()
+       end
+    end
+  end,
+  onCompleted = function( self )
+    if self.s_ then
+      self.sinkObserver_:onNext( true )
+      return self.sinkObserver_:onCompleted()
+    end
+  end
+}
+------------------------------------------------------------------------
+-- toList
+-- 
+-- Creates a list from an observable sequence.
+-- 
+Observable.toList = make_pipe_operator{
+  _init = function( self, sinkObserver )
+    self:super( sinkObserver )
+    self.s_ = {}
+  end
+  onNext = function( self, x )
+    self.s_[#self.s_ + 1] = x
+  end,
+  onCompleted = function( self )
+    self.sinkObserver_:onNext( self.s_ )
+    return self.sinkObserver_:onCompleted()
+  end
 }
 ------------------------------------------------------------------------
 -- groupBy
 -- 
 -- Groups the elements of an observable sequence.
 -- 
-Observable.takeWhile = make_pipe_operator{
+Observable.groupBy = make_pipe_operator{
   _init = function( self, sinkObserver, PARAMS_GO_HERE )
     self:super( sinkObserver )
   end
@@ -605,7 +743,7 @@ Observable.takeWhile = make_pipe_operator{
 -- 
 -- Correlates the elements of two sequences based on overlapping durations.
 -- 
-Observable.takeWhile = make_pipe_operator{
+Observable.join = make_pipe_operator{
   _init = function( self, sinkObserver, PARAMS_GO_HERE )
     self:super( sinkObserver )
   end
@@ -617,18 +755,7 @@ Observable.takeWhile = make_pipe_operator{
 -- Correlates the elements of two sequences based on overlapping 
 -- durations, and groups the results.
 -- 
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
-    self:super( sinkObserver )
-  end
-  FIXME TODO ************************************************************************************
-}
-------------------------------------------------------------------------
--- toList
--- 
--- Creates a list from an observable sequence.
--- 
-Observable.takeWhile = make_pipe_operator{
+Observable.groupJoin = make_pipe_operator{
   _init = function( self, sinkObserver, PARAMS_GO_HERE )
     self:super( sinkObserver )
   end
@@ -639,8 +766,8 @@ Observable.takeWhile = make_pipe_operator{
 -- 
 -- Determines whether two sequences are equal.
 -- 
-Observable.takeWhile = make_pipe_operator{
-  _init = function( self, sinkObserver, PARAMS_GO_HERE )
+Observable.sequenceEqual = make_pipe_operator{
+  _init = function( self, sinkObserver, secondObservable )
     self:super( sinkObserver )
   end
   FIXME TODO ************************************************************************************
