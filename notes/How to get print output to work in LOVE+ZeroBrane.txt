@@ -1,0 +1,2 @@
+1. open interpreters/love2d.lua file
+2. find "DebuggerAttachDefault({" and add to the hash 'redirect = "c",' it should send all "print" output to the "output window"
