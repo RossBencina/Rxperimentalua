@@ -302,6 +302,16 @@ http://msdn.microsoft.com/en-us/library/dd783449.aspx
 IDisposable Interface
 http://msdn.microsoft.com/en-us/library/system.idisposable.aspx
 
+
+Rx Sandbox
+----------------
+
+Rx Sandbox is a useful tool for exploring Rx operator behavior. It lets you play with every operator, inject events, and view the marble diagram of the result.
+
+http://mnajder.blogspot.com.au/2010/03/rxsandbox-v1.html
+http://mnajder.blogspot.com.au/2011/05/rx-projects-update.html
+
+
 Further Reading
 ---------------
 
